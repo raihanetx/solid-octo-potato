@@ -27,7 +27,7 @@ This scaffold provides a robust foundation built with:
 - **🌐 Fetch** - Promise-based HTTP request
 
 ### 🗄️ Database & Backend
-- **🗄️ Prisma** - Next-generation TypeScript ORM
+- **🗄️ Drizzle ORM** - Lightweight, type-safe SQL ORM for TypeScript
 - **🔐 NextAuth.js** - Complete open-source authentication solution
 
 ### 🎨 Advanced UI Features
@@ -47,7 +47,7 @@ This scaffold provides a robust foundation built with:
 - **🎨 Beautiful UI** - Complete shadcn/ui component library with advanced interactions
 - **🔒 Type Safety** - Full TypeScript configuration with Zod validation
 - **📱 Responsive** - Mobile-first design principles with smooth animations
-- **🗄️ Database Ready** - Prisma ORM configured for rapid backend development
+- **🗄️ Database Ready** - Drizzle ORM configured for rapid backend development
 - **🔐 Auth Included** - NextAuth.js for secure authentication flows
 - **📊 Data Visualization** - Charts, tables, and drag-and-drop functionality
 - **🌍 i18n Ready** - Multi-language support with Next Intl
@@ -119,7 +119,7 @@ This scaffold includes a comprehensive set of modern web development tools:
 
 ### 🔐 Backend Integration
 - **Authentication**: Ready-to-use auth flows with NextAuth.js
-- **Database**: Type-safe database operations with Prisma
+- **Database**: Type-safe database operations with Drizzle ORM
 - **API Client**: HTTP requests with Fetch + TanStack Query
 - **State Management**: Simple and scalable with Zustand
 

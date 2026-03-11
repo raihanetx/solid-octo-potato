@@ -1,39 +1,73 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Inter, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { QueryProvider } from "@/lib/query-provider";
+import { SessionProvider } from "@/components/auth/SessionProvider";
+import { db } from "@/db";
+import { settings } from "@/db/schema";
+import { eq } from "drizzle-orm";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
+  variable: "--font-inter",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const plusJakarta = Plus_Jakarta_Sans({
+  variable: "--font-plus-jakarta",
   subsets: ["latin"],
 });
 
-export const metadata: Metadata = {
-  title: "Z.ai Code Scaffold - AI-Powered Development",
-  description: "Modern Next.js scaffold optimized for AI-powered development with Z.ai. Built with TypeScript, Tailwind CSS, and shadcn/ui.",
-  keywords: ["Z.ai", "Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "AI development", "React"],
-  authors: [{ name: "Z.ai Team" }],
-  icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
-  },
-  openGraph: {
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-    url: "https://chat.z.ai",
-    siteName: "Z.ai",
-    type: "website",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-  },
-};
+// Generate dynamic metadata from database settings
+export async function generateMetadata(): Promise<Metadata> {
+  try {
+    const result = await db.select().from(settings).where(eq(settings.id, 1)).limit(1)
+    const settingsData = result[0]
+
+    const websiteName = settingsData?.websiteName || 'EcoMart'
+    const slogan = settingsData?.slogan || 'Premium Grocery Store'
+    const faviconUrl = settingsData?.faviconUrl
+
+    return {
+      title: {
+        default: `${websiteName}${slogan ? ` - ${slogan}` : ''}`,
+        template: `%s | ${websiteName}`,
+      },
+      description: slogan || 'Your one-stop shop for fresh groceries, delivered to your doorstep.',
+      keywords: ["Grocery", "Fresh Food", "Online Shopping", websiteName],
+      authors: [{ name: `${websiteName} Team` }],
+      icons: {
+        icon: faviconUrl ? [
+          { url: faviconUrl, sizes: '32x32', type: 'image/png' },
+        ] : [
+          { url: '/icon', sizes: '32x32', type: 'image/png' },
+        ],
+        apple: faviconUrl ? [
+          { url: faviconUrl, sizes: '180x180', type: 'image/png' },
+        ] : [
+          { url: '/apple-icon', sizes: '180x180', type: 'image/png' },
+        ],
+      },
+    }
+  } catch (error) {
+    console.error('Error generating metadata:', error)
+    // Fallback metadata
+    return {
+      title: 'EcoMart - Premium Grocery Store',
+      description: 'Your one-stop shop for fresh groceries, delivered to your doorstep.',
+      keywords: ["Grocery", "Fresh Food", "Online Shopping", "EcoMart"],
+      authors: [{ name: "EcoMart Team" }],
+      icons: {
+        icon: [
+          { url: '/icon', sizes: '32x32', type: 'image/png' },
+        ],
+        apple: [
+          { url: '/apple-icon', sizes: '180x180', type: 'image/png' },
+        ],
+      },
+    }
+  }
+}
 
 export default function RootLayout({
   children,
@@ -42,11 +76,25 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link 
+          href="https://cdn.jsdelivr.net/npm/remixicon@4.2.0/fonts/remixicon.css" 
+          rel="stylesheet" 
+        />
+        <link 
+          href="https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Hind+Siliguri:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&family=Poppins:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" 
+          rel="stylesheet" 
+        />
+      </head>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
+        className={`${inter.variable} ${plusJakarta.variable} antialiased bg-background text-foreground`}
       >
-        {children}
-        <Toaster />
+        <SessionProvider>
+          <QueryProvider>
+            {children}
+            <Toaster />
+          </QueryProvider>
+        </SessionProvider>
       </body>
     </html>
   );
