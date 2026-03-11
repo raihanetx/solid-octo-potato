@@ -512,29 +512,36 @@ export function AdminProvider({ children, setView }: { children: ReactNode; setV
       if (data.success) {
         const customersWithOrders = await Promise.all(
           data.data.map(async (cust: any) => {
-            const ordersRes = await fetch(`/api/orders?customerId=${cust.id}`)
-            const ordersData = await ordersRes.json()
-            const orders = ordersData.success ? ordersData.data.map((ord: any) => ({
-              date: ord.date,
-              time: ord.time,
-              timeAgo: ord.time,
-              visitCount: 1,
-              total: ord.total,
-              products: (ord.items || []).map((item: any) => ({
-                name: item.name,
-                variants: [{
-                  label: item.variant,
-                  qty: item.qty
-                }]
-              }))
-            })) : []
+            let orders = []
+            try {
+              const ordersRes = await fetch(`/api/orders?customerId=${cust.id}`)
+              const ordersData = await ordersRes.json()
+              if (ordersData.success && Array.isArray(ordersData.data)) {
+                orders = ordersData.data.map((ord: any, idx: number) => ({
+                  date: ord.date || '',
+                  time: ord.time || '',
+                  timeAgo: ord.time || '',
+                  visitCount: idx + 1,
+                  total: parseFloat(String(ord.total || 0)),
+                  products: Array.isArray(ord.items) ? ord.items.map((item: any) => ({
+                    name: item.name || '',
+                    variants: [{
+                      label: item.variant || null,
+                      qty: parseInt(String(item.qty || 1))
+                    }]
+                  })) : []
+                }))
+              }
+            } catch (e) {
+              console.error('Error fetching orders for customer:', cust.id, e)
+            }
             return {
               id: cust.id,
-              name: cust.name,
-              phone: cust.phone,
+              name: cust.name || 'Unknown',
+              phone: cust.phone || '',
               address: cust.address || '',
-              totalOrders: cust.totalOrders || 0,
-              totalSpent: cust.totalSpent || 0,
+              totalOrders: parseInt(String(cust.totalOrders || 0)),
+              totalSpent: parseFloat(String(cust.totalSpent || 0)),
               orders
             }
           })

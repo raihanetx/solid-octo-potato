@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React from 'react'
 import { useAdmin } from '@/components/admin/context/AdminContext'
 import type { AbandonedProduct } from '@/types'
 
@@ -13,8 +13,13 @@ const AbandonedView: React.FC = () => {
   }
 
   const buildEntries = (products: AbandonedProduct[]) => {
+    if (!products || !Array.isArray(products)) return []
     const entries: { name: string; variant: string | null; qty: number }[] = []
-    products.forEach(p => p.variants.forEach(v => entries.push({ name: p.name, variant: v.label, qty: v.qty })))
+    products.forEach(p => {
+      if (p && p.variants && Array.isArray(p.variants)) {
+        p.variants.forEach(v => entries.push({ name: p.name, variant: v.label, qty: v.qty }))
+      }
+    })
     return entries
   }
 
@@ -123,9 +128,9 @@ const AbandonedView: React.FC = () => {
                   </div>
                   
                   {/* Nested Data Rows */}
-                  {ab.history.map((h, idx) => {
+                  {(ab.history || []).map((h, idx) => {
                     const isComp = h.status === 'completed'
-                    const entries = buildEntries(h.products)
+                    const entries = buildEntries(h.products || [])
                     const totalItems = entries.reduce((acc, e) => acc + e.qty, 0)
                     
                     return (
@@ -174,7 +179,7 @@ const AbandonedView: React.FC = () => {
                         {/* Total */}
                         <div className="px-3 py-2.5 border-r border-[#e5e7eb] flex items-center justify-center">
                           <div className="text-center">
-                            <div className="text-[13px] font-bold text-[#16a34a]">TK {h.total.toFixed(2)}</div>
+                            <div className="text-[13px] font-bold text-[#16a34a]">TK {parseFloat(String(h.total || 0)).toFixed(2)}</div>
                             <div className="text-[10px] text-[#6b7280]">({totalItems} items)</div>
                           </div>
                         </div>

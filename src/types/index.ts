@@ -159,6 +159,7 @@ export interface AbandonedProduct {
 }
 
 export interface AbandonedHistory {
+  visitNumber?: number
   date: string
   time: string
   timeAgo: string

@@ -7,11 +7,19 @@ import type { AbandonedProduct } from '@/types'
 const CustomersView: React.FC = () => {
   const { customerProfiles, expandedCustomer, setExpandedCustomer, showToastMsg } = useAdmin()
 
-  const getInitials = (name: string) => name.split(' ').map(w => w[0]).join('').toUpperCase()
+  const getInitials = (name: string) => {
+    if (!name || name === 'Unknown') return '?'
+    return name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)
+  }
 
   const buildEntries = (products: AbandonedProduct[]) => {
+    if (!products || !Array.isArray(products)) return []
     const entries: { name: string; variant: string | null; qty: number }[] = []
-    products.forEach(p => p.variants.forEach(v => entries.push({ name: p.name, variant: v.label, qty: v.qty })))
+    products.forEach(p => {
+      if (p && p.variants && Array.isArray(p.variants)) {
+        p.variants.forEach(v => entries.push({ name: p.name, variant: v.label, qty: v.qty }))
+      }
+    })
     return entries
   }
 
@@ -91,8 +99,8 @@ const CustomersView: React.FC = () => {
               {/* Overview */}
               <div className="px-4 py-3.5 border-r border-[#d1d5db] flex items-center justify-center">
                 <div className="text-center">
-                  <div className="text-[13px] font-medium text-[#1c2333]">Total {cust.totalOrders} Orders</div>
-                  <div className="text-[11px] text-[#6b7280]">Spent TK {cust.totalSpent.toFixed(2)}</div>
+                  <div className="text-[13px] font-medium text-[#1c2333]">Total {cust.totalOrders || 0} Orders</div>
+                  <div className="text-[11px] text-[#6b7280]">Spent TK {parseFloat(String(cust.totalSpent || 0)).toFixed(2)}</div>
                 </div>
               </div>
               
@@ -134,8 +142,8 @@ const CustomersView: React.FC = () => {
                 </div>
                 
                 {/* Nested Data Rows */}
-                {cust.orders.map((o, idx) => {
-                  const entries = buildEntries(o.products)
+                {(cust.orders || []).map((o, idx) => {
+                  const entries = buildEntries(o.products || [])
                   const totalItems = entries.reduce((acc, e) => acc + e.qty, 0)
                   
                   return (
@@ -170,7 +178,7 @@ const CustomersView: React.FC = () => {
                       {/* Total */}
                       <div className="px-3 py-2.5 flex items-center justify-center">
                         <div className="text-center">
-                          <div className="text-[13px] font-bold text-[#16a34a]">TK {o.total.toFixed(2)}</div>
+                          <div className="text-[13px] font-bold text-[#16a34a]">TK {parseFloat(String(o.total || 0)).toFixed(2)}</div>
                           <div className="text-[10px] text-[#6b7280]">(Total {totalItems} items)</div>
                         </div>
                       </div>
