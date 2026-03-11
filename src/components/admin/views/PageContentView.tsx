@@ -3,9 +3,12 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { useAdmin } from '@/components/admin/context/AdminContext'
 
+type ContentType = 'about' | 'terms' | 'refund' | 'privacy'
+
 const PageContentView: React.FC = () => {
   const { settings, setSettings, showToastMsg, refetchSettings } = useAdmin()
   
+  const [activeTab, setActiveTab] = useState<ContentType>('about')
   const [aboutUs, setAboutUs] = useState('')
   const [termsConditions, setTermsConditions] = useState('')
   const [refundPolicy, setRefundPolicy] = useState('')
@@ -55,167 +58,167 @@ const PageContentView: React.FC = () => {
     }
   }
 
+  const tabs: { id: ContentType; label: string; icon: string; description: string }[] = [
+    { id: 'about', label: 'About Us', icon: 'ri-building-line', description: 'Company introduction' },
+    { id: 'terms', label: 'Terms & Conditions', icon: 'ri-file-list-3-line', description: 'Usage policies' },
+    { id: 'refund', label: 'Refund Policy', icon: 'ri-exchange-line', description: 'Return guidelines' },
+    { id: 'privacy', label: 'Privacy Policy', icon: 'ri-shield-user-line', description: 'Data protection' },
+  ]
+
+  const getContent = () => {
+    switch (activeTab) {
+      case 'about': return aboutUs
+      case 'terms': return termsConditions
+      case 'refund': return refundPolicy
+      case 'privacy': return privacyPolicy
+    }
+  }
+
+  const setContent = (value: string) => {
+    switch (activeTab) {
+      case 'about': setAboutUs(value); break
+      case 'terms': setTermsConditions(value); break
+      case 'refund': setRefundPolicy(value); break
+      case 'privacy': setPrivacyPolicy(value); break
+    }
+  }
+
+  const getPlaceholder = () => {
+    switch (activeTab) {
+      case 'about': return 'Write about your company, mission, values, and what makes your business unique...'
+      case 'terms': return 'Define your terms of service, usage rules, purchase conditions, and policies...'
+      case 'refund': return 'Explain your refund and return policies, eligibility criteria, and process...'
+      case 'privacy': return 'Describe how you collect, use, store, and protect customer information...'
+    }
+  }
+
   return (
-    <div className="p-4 md:p-8" style={{fontFamily: "'Inter', sans-serif", backgroundColor: '#ffffff', color: '#0f172a', minHeight: 'calc(100vh - 80px)'}}>
-      <div style={{maxWidth: '900px', margin: '0 auto'}}>
+    <div className="min-h-[calc(100vh-80px)] bg-[#f8fafc]" style={{ fontFamily: "'Inter', sans-serif" }}>
+      <div className="max-w-6xl mx-auto p-6 lg:p-8">
         {/* Header */}
-        <div style={{marginBottom: '24px'}}>
-          <h1 style={{fontSize: '24px', fontWeight: 700, color: '#1c2333'}}>Page Content</h1>
-          <p style={{fontSize: '14px', color: '#6b7280', marginTop: '4px'}}>Manage your store's page content and policies</p>
+        <div className="mb-8">
+          <h1 className="text-2xl font-bold text-[#0f172a] tracking-tight">Page Content</h1>
+          <p className="text-[#64748b] text-sm mt-1">Manage content for your store's informational pages</p>
         </div>
 
-        {/* About Us Section */}
-        <div style={{background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)'}}>
-          <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px'}}>
-            <div style={{width: '36px', height: '36px', borderRadius: '8px', background: '#16a34a15', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-              <i className="ri-building-line" style={{fontSize: '18px', color: '#16a34a'}}></i>
-            </div>
-            <div>
-              <h3 style={{fontSize: '16px', fontWeight: 600, color: '#0f172a'}}>About Us</h3>
-              <p style={{fontSize: '12px', color: '#6b7280'}}>Tell customers about your business</p>
+        <div className="flex gap-8">
+          {/* Sidebar Navigation */}
+          <div className="w-64 shrink-0">
+            <nav className="bg-white rounded-xl border border-[#e2e8f0] overflow-hidden">
+              {tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`w-full flex items-center gap-3 px-4 py-3.5 text-left transition-all border-b border-[#f1f5f9] last:border-b-0 ${
+                    activeTab === tab.id
+                      ? 'bg-[#f0fdf4] border-l-2 border-l-[#16a34a]'
+                      : 'hover:bg-[#f8fafc] border-l-2 border-l-transparent'
+                  }`}
+                >
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
+                    activeTab === tab.id ? 'bg-[#16a34a] text-white' : 'bg-[#f1f5f9] text-[#64748b]'
+                  }`}>
+                    <i className={`${tab.icon} text-lg`}></i>
+                  </div>
+                  <div>
+                    <span className={`block text-sm font-medium ${activeTab === tab.id ? 'text-[#16a34a]' : 'text-[#0f172a]'}`}>
+                      {tab.label}
+                    </span>
+                    <span className="text-xs text-[#94a3b8]">{tab.description}</span>
+                  </div>
+                </button>
+              ))}
+            </nav>
+
+            {/* Quick Stats */}
+            <div className="mt-4 bg-white rounded-xl border border-[#e2e8f0] p-4">
+              <h4 className="text-xs font-semibold text-[#64748b] uppercase tracking-wider mb-3">Content Stats</h4>
+              <div className="space-y-3">
+                {tabs.map((tab) => {
+                  const len = tab.id === 'about' ? aboutUs.length :
+                              tab.id === 'terms' ? termsConditions.length :
+                              tab.id === 'refund' ? refundPolicy.length :
+                              privacyPolicy.length
+                  return (
+                    <div key={tab.id} className="flex items-center justify-between">
+                      <span className="text-xs text-[#64748b]">{tab.label}</span>
+                      <span className={`text-xs font-medium ${len > 0 ? 'text-[#16a34a]' : 'text-[#94a3b8]'}`}>
+                        {len} chars
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           </div>
-          <textarea
-            placeholder="Write about your company, mission, and values..."
-            value={aboutUs}
-            onChange={(e) => setAboutUs(e.target.value)}
-            style={{
-              width: '100%',
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
-              borderRadius: '8px',
-              padding: '12px 14px',
-              color: '#0f172a',
-              fontSize: '14px',
-              outline: 'none',
-              minHeight: '150px',
-              resize: 'vertical',
-              fontFamily: 'inherit',
-              lineHeight: '1.6'
-            }}
-          />
-        </div>
 
-        {/* Terms & Conditions Section */}
-        <div style={{background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)'}}>
-          <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px'}}>
-            <div style={{width: '36px', height: '36px', borderRadius: '8px', background: '#f59e0b15', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-              <i className="ri-file-list-3-line" style={{fontSize: '18px', color: '#f59e0b'}}></i>
+          {/* Main Content */}
+          <div className="flex-1 min-w-0">
+            {/* Editor Card */}
+            <div className="bg-white rounded-xl border border-[#e2e8f0] overflow-hidden">
+              {/* Card Header */}
+              <div className="px-6 py-4 border-b border-[#f1f5f9] flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-[#f0fdf4] rounded-lg flex items-center justify-center">
+                    <i className={`${tabs.find(t => t.id === activeTab)!.icon} text-[#16a34a] text-lg`}></i>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-[#0f172a]">
+                      {tabs.find(t => t.id === activeTab)!.label}
+                    </h3>
+                    <p className="text-xs text-[#64748b]">
+                      {activeTab === 'about' && 'Tell customers about your business'}
+                      {activeTab === 'terms' && 'Rules for using your service'}
+                      {activeTab === 'refund' && 'Return and refund guidelines'}
+                      {activeTab === 'privacy' && 'How you protect customer data'}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-[#f8fafc] rounded-lg">
+                  <i className="ri-text text-[#64748b] text-sm"></i>
+                  <span className="text-xs text-[#64748b]">{getContent().length} characters</span>
+                </div>
+              </div>
+
+              {/* Editor Area */}
+              <div className="p-6">
+                <textarea
+                  placeholder={getPlaceholder()}
+                  value={getContent()}
+                  onChange={(e) => setContent(e.target.value)}
+                  className="w-full bg-[#f8fafc] border border-[#e2e8f0] rounded-xl p-5 text-sm text-[#0f172a] outline-none focus:border-[#16a34a] focus:bg-white focus:ring-2 focus:ring-[#16a34a]/10 transition-all resize-none"
+                  style={{ minHeight: '420px', lineHeight: '1.8' }}
+                />
+              </div>
+
+              {/* Footer */}
+              <div className="px-6 py-4 bg-[#f8fafc] border-t border-[#f1f5f9] flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs text-[#64748b]">
+                  <i className="ri-information-line"></i>
+                  <span>Content appears on your public {tabs.find(t => t.id === activeTab)!.label.toLowerCase()} page</span>
+                </div>
+                <button
+                  onClick={() => setActiveTab(activeTab === 'about' ? 'terms' : activeTab === 'terms' ? 'refund' : activeTab === 'refund' ? 'privacy' : 'about')}
+                  className="text-xs text-[#16a34a] font-medium hover:underline"
+                >
+                  Next page →
+                </button>
+              </div>
             </div>
-            <div>
-              <h3 style={{fontSize: '16px', fontWeight: 600, color: '#0f172a'}}>Terms & Conditions</h3>
-              <p style={{fontSize: '12px', color: '#6b7280'}}>Rules and guidelines for using your service</p>
+
+            {/* Save Button */}
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={handleSaveContent}
+                disabled={saving}
+                className="px-6 py-3 bg-[#16a34a] text-white text-sm font-semibold rounded-lg hover:bg-[#15803d] transition-colors flex items-center gap-2 disabled:bg-[#cbd5e1]"
+              >
+                <i className="ri-save-line"></i>
+                {saving ? 'Saving...' : 'Save All Content'}
+              </button>
             </div>
           </div>
-          <textarea
-            placeholder="Define your terms of service, usage rules, and policies..."
-            value={termsConditions}
-            onChange={(e) => setTermsConditions(e.target.value)}
-            style={{
-              width: '100%',
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
-              borderRadius: '8px',
-              padding: '12px 14px',
-              color: '#0f172a',
-              fontSize: '14px',
-              outline: 'none',
-              minHeight: '150px',
-              resize: 'vertical',
-              fontFamily: 'inherit',
-              lineHeight: '1.6'
-            }}
-          />
         </div>
-
-        {/* Refund Policy Section */}
-        <div style={{background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '20px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)'}}>
-          <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px'}}>
-            <div style={{width: '36px', height: '36px', borderRadius: '8px', background: '#ef444415', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-              <i className="ri-exchange-line" style={{fontSize: '18px', color: '#ef4444'}}></i>
-            </div>
-            <div>
-              <h3 style={{fontSize: '16px', fontWeight: 600, color: '#0f172a'}}>Refund Policy</h3>
-              <p style={{fontSize: '12px', color: '#6b7280'}}>Return and refund guidelines for customers</p>
-            </div>
-          </div>
-          <textarea
-            placeholder="Explain your refund and return policies..."
-            value={refundPolicy}
-            onChange={(e) => setRefundPolicy(e.target.value)}
-            style={{
-              width: '100%',
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
-              borderRadius: '8px',
-              padding: '12px 14px',
-              color: '#0f172a',
-              fontSize: '14px',
-              outline: 'none',
-              minHeight: '150px',
-              resize: 'vertical',
-              fontFamily: 'inherit',
-              lineHeight: '1.6'
-            }}
-          />
-        </div>
-
-        {/* Privacy Policy Section */}
-        <div style={{background: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '12px', padding: '20px', marginBottom: '24px', boxShadow: '0 1px 3px rgba(0,0,0,0.05)'}}>
-          <div style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px'}}>
-            <div style={{width: '36px', height: '36px', borderRadius: '8px', background: '#8b5cf615', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-              <i className="ri-shield-user-line" style={{fontSize: '18px', color: '#8b5cf6'}}></i>
-            </div>
-            <div>
-              <h3 style={{fontSize: '16px', fontWeight: 600, color: '#0f172a'}}>Privacy Policy</h3>
-              <p style={{fontSize: '12px', color: '#6b7280'}}>How you handle and protect customer data</p>
-            </div>
-          </div>
-          <textarea
-            placeholder="Describe how you collect, use, and protect customer information..."
-            value={privacyPolicy}
-            onChange={(e) => setPrivacyPolicy(e.target.value)}
-            style={{
-              width: '100%',
-              background: '#ffffff',
-              border: '1px solid #e2e8f0',
-              borderRadius: '8px',
-              padding: '12px 14px',
-              color: '#0f172a',
-              fontSize: '14px',
-              outline: 'none',
-              minHeight: '150px',
-              resize: 'vertical',
-              fontFamily: 'inherit',
-              lineHeight: '1.6'
-            }}
-          />
-        </div>
-
-        {/* Save Button */}
-        <button
-          onClick={handleSaveContent}
-          disabled={saving}
-          style={{
-            background: saving ? '#9ca3af' : '#16a34a',
-            color: '#ffffff',
-            fontWeight: 600,
-            padding: '14px 28px',
-            borderRadius: '8px',
-            cursor: saving ? 'not-allowed' : 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '8px',
-            border: 'none',
-            width: '100%',
-            fontSize: '15px',
-            transition: 'background 0.2s'
-          }}
-        >
-          <i className="ri-save-line"></i>
-          {saving ? 'Saving...' : 'Save All Content'}
-        </button>
       </div>
     </div>
   )
