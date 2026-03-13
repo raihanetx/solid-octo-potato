@@ -17,16 +17,33 @@ interface CartState {
   getTotal: () => number
 }
 
-// Track cart event to analytics API
+// Debounce map for analytics tracking
+const analyticsDebounce = new Map<number, NodeJS.Timeout>()
+const ANALYTICS_DEBOUNCE_MS = 2000 // Only track once per item per 2 seconds
+
+// Track cart event to analytics API (with debouncing to prevent spam)
 const trackCartEvent = async (productId: number, action: 'add' | 'remove') => {
+  // Skip if recently tracked (debounce)
+  if (analyticsDebounce.has(productId)) {
+    return
+  }
+  
+  // Mark as being tracked
+  const timeout = setTimeout(() => {
+    analyticsDebounce.delete(productId)
+  }, ANALYTICS_DEBOUNCE_MS)
+  analyticsDebounce.set(productId, timeout)
+  
   try {
     await fetch('/api/analytics', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: `cart-${action}`, productId }),
+    }).catch(() => {
+      // Silently fail analytics
     })
   } catch (e) {
-    console.error('Failed to track cart event:', e)
+    // Silently fail analytics
   }
 }
 

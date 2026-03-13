@@ -5,7 +5,43 @@ import { db } from '@/db'
 import { coupons, products } from '@/db/schema'
 import { eq, inArray } from 'drizzle-orm'
 
-// GET /api/coupons - Get all coupons or validate a specific code
+// Rate limiting map
+const rateLimitMap = new Map<string, { count: number; timestamp: number }>()
+const RATE_LIMIT = 100 // requests per minute
+const RATE_LIMIT_WINDOW = 60 * 1000 // 1 minute
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now()
+  const record = rateLimitMap.get(ip)
+  
+  if (!record || now - record.timestamp > RATE_LIMIT_WINDOW) {
+    rateLimitMap.set(ip, { count: 1, timestamp: now })
+    return true
+  }
+  
+  if (record.count >= RATE_LIMIT) {
+    return false
+  }
+  
+  record.count++
+  return true
+}
+
+// Input validation helpers
+function sanitizeString(input: unknown, fieldName: string): string {
+  if (typeof input !== 'string') {
+    throw new Error(`${fieldName} must be a string`)
+  }
+  return input.trim().slice(0, 100).replace(/[<>]/g, '')
+}
+
+function validateNumeric(input: unknown, fieldName: string, min = 0, max?: number): number {
+  const num = Number(input)
+  if (isNaN(num) || num < min || (max !== undefined && num > max)) {
+    throw new Error(`${fieldName} must be a valid number`)
+  }
+  return num
+}
 // Public: Can validate a specific coupon code (for checkout) or get active coupons (public=true)
 // Protected: Listing all coupons requires authentication
 export async function GET(request: NextRequest) {
@@ -117,11 +153,11 @@ export async function GET(request: NextRequest) {
       })
     }
     
-    // PROTECTED: List all coupons (admin only) - Authentication disabled for development
-    // const session = await getServerSession(authOptions)
-    // if (!session || !session.user) {
-    //   return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
-    // }
+    // PROTECTED: List all coupons (admin only)
+    const session = await getServerSession(authOptions)
+    if (!session || !session.user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
     
     const allCoupons = await db.select().from(coupons)
     
@@ -142,34 +178,60 @@ export async function GET(request: NextRequest) {
 // POST /api/coupons - Create new coupon
 export async function POST(request: NextRequest) {
   try {
-    // Authentication disabled for development
-    // const session = await getServerSession(authOptions)
-    // if (!session || !session.user) {
-    //   return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
-    // }
+    // Check authentication
+    const session = await getServerSession(authOptions)
+    if (!session || !session.user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
+    
+    // Check rate limit
+    const ip = request.headers.get('x-forwarded-for') || 'unknown'
+    if (!checkRateLimit(ip)) {
+      return NextResponse.json(
+        { success: false, error: 'Too many requests. Please try again later.' },
+        { status: 429 }
+      )
+    }
 
     const body = await request.json()
     
+    // Validate required fields
+    if (!body.code || typeof body.code !== 'string') {
+      return NextResponse.json({ success: false, error: 'Coupon code is required' }, { status: 400 })
+    }
+    
+    if (!body.type || !['pct', 'fixed'].includes(body.type)) {
+      return NextResponse.json({ success: false, error: 'Coupon type must be "pct" or "fixed"' }, { status: 400 })
+    }
+    
+    if (!body.value || typeof body.value !== 'number') {
+      return NextResponse.json({ success: false, error: 'Coupon value is required' }, { status: 400 })
+    }
+    
+    if (!body.scope || !['all', 'products', 'categories'].includes(body.scope)) {
+      return NextResponse.json({ success: false, error: 'Coupon scope must be "all", "products", or "categories"' }, { status: 400 })
+    }
+    
     const newCoupon = await db.insert(coupons).values({
       id: body.id || `coupon-${Date.now()}`,
-      code: body.code.toUpperCase(),
+      code: sanitizeString(body.code, 'Code').toUpperCase(),
       type: body.type,
-      value: body.value,
+      value: validateNumeric(body.value, 'Value', 0, 100),
       scope: body.scope,
       expiry: body.expiry || null,
-      selectedProducts: body.selectedProducts ? JSON.stringify(body.selectedProducts) : null,
-      selectedCategories: body.selectedCategories ? JSON.stringify(body.selectedCategories) : null,
+      selectedProducts: body.selectedProducts ? JSON.stringify(body.selectedProducts.slice(0, 100)) : null,
+      selectedCategories: body.selectedCategories ? JSON.stringify(body.selectedCategories.slice(0, 100)) : null,
     }).returning()
     
     return NextResponse.json({
       success: true,
       data: newCoupon[0]
     }, { status: 201 })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating coupon:', error)
     return NextResponse.json(
-      { success: false, error: 'Failed to create coupon' },
-      { status: 500 }
+      { success: false, error: error.message || 'Failed to create coupon' },
+      { status: 400 }
     )
   }
 }
@@ -177,11 +239,11 @@ export async function POST(request: NextRequest) {
 // PUT /api/coupons - Update coupon
 export async function PUT(request: NextRequest) {
   try {
-    // Authentication disabled for development
-    // const session = await getServerSession(authOptions)
-    // if (!session || !session.user) {
-    //   return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
-    // }
+    // Check authentication
+    const session = await getServerSession(authOptions)
+    if (!session || !session.user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
 
     const body = await request.json()
     const { id, ...updateData } = body
@@ -193,15 +255,24 @@ export async function PUT(request: NextRequest) {
       )
     }
     
+    // Validate fields
+    if (updateData.type && !['pct', 'fixed'].includes(updateData.type)) {
+      return NextResponse.json({ success: false, error: 'Invalid coupon type' }, { status: 400 })
+    }
+    
+    if (updateData.scope && !['all', 'products', 'categories'].includes(updateData.scope)) {
+      return NextResponse.json({ success: false, error: 'Invalid coupon scope' }, { status: 400 })
+    }
+    
     const updated = await db.update(coupons)
       .set({
-        code: updateData.code?.toUpperCase(),
+        code: updateData.code ? sanitizeString(updateData.code, 'Code').toUpperCase() : undefined,
         type: updateData.type,
-        value: updateData.value,
+        value: updateData.value ? validateNumeric(updateData.value, 'Value', 0, 100) : undefined,
         scope: updateData.scope,
         expiry: updateData.expiry || null,
-        selectedProducts: updateData.selectedProducts ? JSON.stringify(updateData.selectedProducts) : null,
-        selectedCategories: updateData.selectedCategories ? JSON.stringify(updateData.selectedCategories) : null,
+        selectedProducts: updateData.selectedProducts ? JSON.stringify(updateData.selectedProducts.slice(0, 100)) : undefined,
+        selectedCategories: updateData.selectedCategories ? JSON.stringify(updateData.selectedCategories.slice(0, 100)) : undefined,
       })
       .where(eq(coupons.id, id))
       .returning()
@@ -217,11 +288,11 @@ export async function PUT(request: NextRequest) {
       success: true,
       data: updated[0]
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error updating coupon:', error)
     return NextResponse.json(
-      { success: false, error: 'Failed to update coupon' },
-      { status: 500 }
+      { success: false, error: error.message || 'Failed to update coupon' },
+      { status: 400 }
     )
   }
 }
@@ -229,11 +300,11 @@ export async function PUT(request: NextRequest) {
 // DELETE /api/coupons - Delete coupon
 export async function DELETE(request: NextRequest) {
   try {
-    // Authentication disabled for development
-    // const session = await getServerSession(authOptions)
-    // if (!session || !session.user) {
-    //   return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
-    // }
+    // Check authentication
+    const session = await getServerSession(authOptions)
+    if (!session || !session.user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
 
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
@@ -259,11 +330,11 @@ export async function DELETE(request: NextRequest) {
       message: 'Coupon deleted successfully',
       data: deleted[0]
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting coupon:', error)
     return NextResponse.json(
-      { success: false, error: 'Failed to delete coupon' },
-      { status: 500 }
+      { success: false, error: error.message || 'Failed to delete coupon' },
+      { status: 400 }
     )
   }
 }

@@ -3,11 +3,49 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { db } from '@/db'
 import { categories, products } from '@/db/schema'
-import { eq, sql, isNull } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
+
+// Rate limiting map
+const rateLimitMap = new Map<string, { count: number; timestamp: number }>()
+const RATE_LIMIT = 100
+const RATE_LIMIT_WINDOW = 60 * 1000
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now()
+  const record = rateLimitMap.get(ip)
+  
+  if (!record || now - record.timestamp > RATE_LIMIT_WINDOW) {
+    rateLimitMap.set(ip, { count: 1, timestamp: now })
+    return true
+  }
+  
+  if (record.count >= RATE_LIMIT) {
+    return false
+  }
+  
+  record.count++
+  return true
+}
+
+function sanitizeString(input: unknown, fieldName: string, maxLength = 100): string {
+  if (typeof input !== 'string') {
+    throw new Error(`${fieldName} must be a string`)
+  }
+  return input.trim().slice(0, maxLength).replace(/[<>]/g, '')
+}
 
 // GET /api/categories - Get all categories with product counts
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    // Check rate limit
+    const ip = request.headers.get('x-forwarded-for') || 'unknown'
+    if (!checkRateLimit(ip)) {
+      return NextResponse.json(
+        { success: false, error: 'Too many requests. Please try again later.' },
+        { status: 429 }
+      )
+    }
+    
     // Get all categories
     const allCategories = await db.select().from(categories)
     
@@ -39,10 +77,10 @@ export async function GET() {
       data: categoriesWithCounts,
       count: categoriesWithCounts.length
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error fetching categories:', error)
     return NextResponse.json(
-      { success: false, error: 'Failed to fetch categories' },
+      { success: false, error: error.message || 'Failed to fetch categories' },
       { status: 500 }
     )
   }
@@ -51,21 +89,40 @@ export async function GET() {
 // POST /api/categories - Create new category
 export async function POST(request: NextRequest) {
   try {
-    // Authentication disabled for development
-    // const session = await getServerSession(authOptions)
-    // if (!session || !session.user) {
-    //   return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
-    // }
+    // Check authentication
+    const session = await getServerSession(authOptions)
+    if (!session || !session.user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
+    
+    // Check rate limit
+    const ip = request.headers.get('x-forwarded-for') || 'unknown'
+    if (!checkRateLimit(ip)) {
+      return NextResponse.json(
+        { success: false, error: 'Too many requests. Please try again later.' },
+        { status: 429 }
+      )
+    }
 
     const body = await request.json()
     
+    // Validate required fields
+    if (!body.name || typeof body.name !== 'string') {
+      return NextResponse.json({ success: false, error: 'Category name is required' }, { status: 400 })
+    }
+    
+    // Validate type
+    if (body.type && !['icon', 'image'].includes(body.type)) {
+      return NextResponse.json({ success: false, error: 'Invalid category type' }, { status: 400 })
+    }
+    
     const newCategory = await db.insert(categories).values({
       id: body.id || `CAT-${Date.now()}`,
-      name: body.name,
+      name: sanitizeString(body.name, 'Name', 50),
       type: body.type || 'icon',
-      icon: body.icon || null,
-      image: body.image || null,
-      items: 0, // Always start with 0, calculated from products
+      icon: body.icon ? sanitizeString(body.icon, 'Icon', 100) : null,
+      image: body.image ? sanitizeString(body.image, 'Image', 500) : null,
+      items: 0,
       status: body.status || 'Active',
     }).returning()
     
@@ -73,11 +130,11 @@ export async function POST(request: NextRequest) {
       success: true,
       data: { ...newCategory[0], items: 0 }
     }, { status: 201 })
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error creating category:', error)
     return NextResponse.json(
-      { success: false, error: 'Failed to create category' },
-      { status: 500 }
+      { success: false, error: error.message || 'Failed to create category' },
+      { status: 400 }
     )
   }
 }
@@ -85,51 +142,46 @@ export async function POST(request: NextRequest) {
 // PUT /api/categories - Update category
 export async function PUT(request: NextRequest) {
   try {
-    // Authentication disabled for development
-    // const session = await getServerSession(authOptions)
-    // if (!session || !session.user) {
-    //   return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
-    // }
+    // Check authentication
+    const session = await getServerSession(authOptions)
+    if (!session || !session.user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
 
     const body = await request.json()
     const { id, ...updateData } = body
     
     if (!id) {
-      return NextResponse.json(
-        { success: false, error: 'Category ID is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ success: false, error: 'Category ID is required' }, { status: 400 })
     }
     
-    const updatedCategory = await db
-      .update(categories)
-      .set({
-        name: updateData.name,
-        type: updateData.type,
-        icon: updateData.icon || null,
-        image: updateData.image || null,
-        status: updateData.status,
-        // Don't update items - it's calculated from products
-      })
+    // Validate type
+    if (updateData.type && !['icon', 'image'].includes(updateData.type)) {
+      return NextResponse.json({ success: false, error: 'Invalid category type' }, { status: 400 })
+    }
+    
+    const sanitizedUpdate: any = {}
+    if (updateData.name) sanitizedUpdate.name = sanitizeString(updateData.name, 'Name', 50)
+    if (updateData.type) sanitizedUpdate.type = updateData.type
+    if (updateData.icon !== undefined) sanitizedUpdate.icon = updateData.icon ? sanitizeString(updateData.icon, 'Icon', 100) : null
+    if (updateData.image !== undefined) sanitizedUpdate.image = updateData.image ? sanitizeString(updateData.image, 'Image', 500) : null
+    if (updateData.status) sanitizedUpdate.status = sanitizeString(updateData.status, 'Status', 20)
+    
+    const updated = await db.update(categories)
+      .set(sanitizedUpdate)
       .where(eq(categories.id, id))
       .returning()
     
-    if (updatedCategory.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Category not found' },
-        { status: 404 }
-      )
+    if (updated.length === 0) {
+      return NextResponse.json({ success: false, error: 'Category not found' }, { status: 404 })
     }
     
-    return NextResponse.json({
-      success: true,
-      data: updatedCategory[0]
-    })
-  } catch (error) {
+    return NextResponse.json({ success: true, data: updated[0] })
+  } catch (error: any) {
     console.error('Error updating category:', error)
     return NextResponse.json(
-      { success: false, error: 'Failed to update category' },
-      { status: 500 }
+      { success: false, error: error.message || 'Failed to update category' },
+      { status: 400 }
     )
   }
 }
@@ -137,64 +189,31 @@ export async function PUT(request: NextRequest) {
 // DELETE /api/categories - Delete category
 export async function DELETE(request: NextRequest) {
   try {
-    // Authentication disabled for development
-    // const session = await getServerSession(authOptions)
-    // if (!session || !session.user) {
-    //   return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
-    // }
+    // Check authentication
+    const session = await getServerSession(authOptions)
+    if (!session || !session.user) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 })
+    }
 
     const { searchParams } = new URL(request.url)
     const id = searchParams.get('id')
     
-    console.log('DELETE category request for ID:', id)
-    
     if (!id) {
-      return NextResponse.json(
-        { success: false, error: 'Category ID is required' },
-        { status: 400 }
-      )
+      return NextResponse.json({ success: false, error: 'Category ID is required' }, { status: 400 })
     }
     
-    // First check if category exists
-    const existingCategory = await db
-      .select()
-      .from(categories)
-      .where(eq(categories.id, id))
-      .limit(1)
+    const deleted = await db.delete(categories).where(eq(categories.id, id)).returning()
     
-    if (existingCategory.length === 0) {
-      return NextResponse.json(
-        { success: false, error: 'Category not found' },
-        { status: 404 }
-      )
+    if (deleted.length === 0) {
+      return NextResponse.json({ success: false, error: 'Category not found' }, { status: 404 })
     }
     
-    // Unassign all products from this category (set categoryId to null)
-    await db
-      .update(products)
-      .set({ categoryId: null })
-      .where(eq(products.categoryId, id))
-    
-    console.log('Unassigned products from category:', id)
-    
-    // Now delete the category
-    const deletedCategory = await db
-      .delete(categories)
-      .where(eq(categories.id, id))
-      .returning()
-    
-    console.log('Deleted category:', deletedCategory)
-    
-    return NextResponse.json({
-      success: true,
-      message: 'Category deleted successfully',
-      data: deletedCategory[0]
-    })
-  } catch (error) {
+    return NextResponse.json({ success: true, message: 'Category deleted successfully' })
+  } catch (error: any) {
     console.error('Error deleting category:', error)
     return NextResponse.json(
-      { success: false, error: 'Failed to delete category: ' + (error as Error).message },
-      { status: 500 }
+      { success: false, error: error.message || 'Failed to delete category' },
+      { status: 400 }
     )
   }
 }
